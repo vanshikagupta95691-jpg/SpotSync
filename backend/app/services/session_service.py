@@ -9,6 +9,7 @@ from app.models.booking import Booking
 from app.models.parking_lot import ParkingLot
 from app.models.vehicle import Vehicle
 from app.services.notification_service import notification_service
+from app.repositories.ticket_repository import consume_unused_session_tokens
 from app.repositories.session_repository import (
     create_session,
     get_active_session_for_slot,
@@ -167,31 +168,69 @@ def end_parking_session(
     if session.status != "ACTIVE":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This parking session is already closed",
+            detail="This parking session is already completed",
         )
 
-    session.status = "COMPLETED"
-    session.ended_at = datetime.now(timezone.utc)
+    slot = get_slot_for_update(db, session.parking_slot_id)
+
+    if slot is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Parking slot could not be found",
+        )
+
+    now = datetime.now(timezone.utc)
 
     try:
+        session.status = "COMPLETED"
+        session.ended_at = now
+
+        # Consume QR tokens in the same transaction as session completion.
+        consume_unused_session_tokens(db, session.id, now)
+
         db.commit()
         db.refresh(session)
+        db.refresh(slot)
 
-        notification_service.create_safely(
-            db,
-            user_id,
-            "Parking session completed",
-            f"Your parking session #{session_id} has been completed.",
-            "success",
-        )
-
-        return session
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Could not complete this parking session",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+    vacancy_confirmed = (
+        slot.status == "AVAILABLE" and slot.is_available is True
+    )
+
+    notification_service.create_safely(
+        db,
+        user_id,
+        "Parking session completed",
+        f"Your parking session #{session_id} has been completed.",
+        "success",
+    )
+
+    return {
+        "id": session.id,
+        "parking_lot_id": session.parking_lot_id,
+        "parking_slot_id": session.parking_slot_id,
+        "user_id": session.user_id,
+        "vehicle_id": session.vehicle_id,
+        "status": session.status,
+        "started_at": session.started_at,
+        "ended_at": session.ended_at,
+        "slot_status": slot.status,
+        "slot_vacancy_confirmed": vacancy_confirmed,
+        "message": (
+            "Exit completed. Parking slot vacancy confirmed."
+            if vacancy_confirmed
+            else "Exit completed. Waiting for sensor confirmation of vacancy."
+        ),
+    }
 
 
 def get_user_parking_sessions(db: Session, user_id: int):

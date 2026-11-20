@@ -130,21 +130,48 @@ def test_booking_entry_rejects_pending_booking(monkeypatch):
 
 
 def test_exit_completes_session_without_releasing_slot(monkeypatch):
-    session = SimpleNamespace(status="ACTIVE", ended_at=None)
+    session = SimpleNamespace(
+        id=101,
+        parking_lot_id=30,
+        parking_slot_id=20,
+        user_id=1,
+        vehicle_id=10,
+        status="ACTIVE",
+        started_at=None,
+        ended_at=None,
+    )
+    slot = SimpleNamespace(status="OCCUPIED", is_available=False)
     db = MagicMock()
+    consumed = []
+
     monkeypatch.setattr(
         session_service, "get_session_for_user_for_update",
         lambda *a: session,
+    )
+    monkeypatch.setattr(
+        session_service, "get_slot_for_update",
+        lambda *a: slot,
+    )
+    monkeypatch.setattr(
+        session_service, "consume_unused_session_tokens",
+        lambda db, session_id, now: consumed.append(session_id) or 1,
+    )
+    monkeypatch.setattr(
+        session_service.notification_service, "create_safely",
+        lambda *a, **kwargs: None,
     )
 
     result = session_service.end_parking_session(
         db, session_id=101, user_id=1
     )
 
-    assert result.status == "COMPLETED"
-    assert result.ended_at is not None
-    assert db.commit.call_count == 2
-    db.get.assert_not_called()
+    assert result["status"] == "COMPLETED"
+    assert result["ended_at"] is not None
+    assert result["slot_status"] == "OCCUPIED"
+    assert result["slot_vacancy_confirmed"] is False
+    assert "Waiting for sensor confirmation" in result["message"]
+    assert consumed == [101]
+    db.commit.assert_called_once()
 
 
 def test_exit_rejects_session_not_owned_by_user(monkeypatch):

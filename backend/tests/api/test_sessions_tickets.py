@@ -62,7 +62,12 @@ def test_session_entry_route(monkeypatch):
 def test_session_exit_route(monkeypatch):
     monkeypatch.setattr(
         sessions, "end_parking_session",
-        lambda db, **kwargs: make_session(),
+        lambda db, **kwargs: {
+            **make_session().__dict__,
+            "slot_status": "OCCUPIED",
+            "slot_vacancy_confirmed": False,
+            "message": "Exit completed. Waiting for sensor confirmation of vacancy.",
+        },
     )
     set_dependencies()
     try:
@@ -96,6 +101,7 @@ def test_create_ticket_route(monkeypatch):
         tickets, "generate_session_ticket",
         lambda db, **kwargs: {
             "token": "sample-secure-ticket-token-123456",
+            "navigation_url": "/api/navigate/sample-secure-ticket-token-123456",
             "expires_at": expires_at,
             "message": "Ticket created",
         },

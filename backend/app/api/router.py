@@ -17,7 +17,10 @@ from app.api.routes import (
     notifications,
 )
 
-from app.api.navigation import router as navigation_router
+from app.api.navigation import (
+    router as navigation_router,
+    driver_navigation_router,
+)
 
 api_router = APIRouter(prefix="/api")
 
@@ -35,3 +38,4 @@ api_router.include_router(sessions.router)
 api_router.include_router(tickets.router)
 api_router.include_router(notifications.router)
 api_router.include_router(navigation_router)
+api_router.include_router(driver_navigation_router)

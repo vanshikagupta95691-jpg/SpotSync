@@ -43,3 +43,29 @@ def get_token_for_update(db: Session, token_hash: str):
         .with_for_update()
     )
     return db.scalars(statement).first()
+
+
+def get_ticket_by_hash(db: Session, token_hash: str):
+    """Read a ticket token without locking or modifying it."""
+    statement = select(TicketToken).where(
+        TicketToken.token_hash == token_hash
+    )
+    return db.scalars(statement).first()
+
+
+def consume_unused_session_tokens(db: Session, session_id: int, now):
+    statement = (
+        select(TicketToken)
+        .where(
+            TicketToken.parking_session_id == session_id,
+            TicketToken.revoked_at.is_(None),
+            TicketToken.used_at.is_(None),
+        )
+        .with_for_update()
+    )
+    tokens = db.scalars(statement).all()
+
+    for token in tokens:
+        token.used_at = now
+
+    return len(tokens)

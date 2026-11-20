@@ -79,3 +79,25 @@ def navigate_to_parking_slot(slot_id: int):
         )
 
     return details
+
+
+# Driver navigation is a separate public, token-authenticated workflow.
+from app.schemas.ticket import DriverNavigationResponse
+from app.services.driver_navigation_service import get_driver_navigation
+from app.api.dependencies import get_db
+from fastapi import Depends, Path
+from sqlalchemy.orm import Session
+
+
+driver_navigation_router = APIRouter(tags=["Driver Navigation"])
+
+
+@driver_navigation_router.get(
+    "/navigate/{token}",
+    response_model=DriverNavigationResponse,
+)
+def public_driver_navigation(
+    token: str = Path(..., min_length=20, max_length=256),
+    db: Session = Depends(get_db),
+):
+    return get_driver_navigation(db, token)

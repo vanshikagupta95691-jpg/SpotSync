@@ -20,3 +20,9 @@ class ParkingSessionResponse(BaseModel):
     status: str
     started_at: datetime
     ended_at: datetime | None
+
+
+class ParkingSessionExitResponse(ParkingSessionResponse):
+    slot_status: str
+    slot_vacancy_confirmed: bool
+    message: str

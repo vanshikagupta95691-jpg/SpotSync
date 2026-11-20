@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.schemas.session import (
     ParkingSessionResponse,
+    ParkingSessionExitResponse,
     SessionEntryRequest,
 )
 from app.services.session_service import (
@@ -37,7 +38,7 @@ def vehicle_entry(
 
 @router.post(
     "/{session_id}/exit",
-    response_model=ParkingSessionResponse,
+    response_model=ParkingSessionExitResponse,
 )
 def vehicle_exit(
     session_id: int,
