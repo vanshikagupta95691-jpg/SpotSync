@@ -134,12 +134,6 @@ def test_unknown_token_returns_404_without_exposing_data(monkeypatch):
     ("field", "value", "expected_status"),
     [
         ("revoked_at", datetime.now(timezone.utc), 409),
-        ("used_at", datetime.now(timezone.utc), 409),
-        (
-            "expires_at",
-            datetime.now(timezone.utc) - timedelta(minutes=1),
-            410,
-        ),
     ],
 )
 def test_unusable_token_is_rejected(
@@ -154,6 +148,33 @@ def test_unusable_token_is_rejected(
 
     assert exc.value.status_code == expected_status
     db.get.assert_not_called()
+    db.commit.assert_not_called()
+    db.flush.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["used_at", "expires_at"],
+)
+def test_used_or_expired_admin_ticket_remains_navigable(monkeypatch, field):
+    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db, token = make_records()
+    setattr(token, field, past)
+    mock_token_lookup(monkeypatch, token)
+
+    route = {
+        "route": ["ENTRANCE_MAIN", "A-12"],
+        "distance_m": 25,
+        "travel_time_s": 30,
+        "route_data_status": "SIMULATED_DEMO",
+        "topology_status": "UNVERIFIED_PLACEHOLDER",
+    }
+    monkeypatch.setattr(service, "get_route_details", lambda slot_id: route)
+
+    result = service.get_driver_navigation(db, RAW_TOKEN)
+
+    assert result["session_id"] == 10
+    assert result["navigation"] == route
     db.commit.assert_not_called()
     db.flush.assert_not_called()
 

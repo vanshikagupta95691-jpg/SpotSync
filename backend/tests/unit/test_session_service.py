@@ -187,3 +187,49 @@ def test_exit_rejects_session_not_owned_by_user(monkeypatch):
         )
 
     assert exc.value.status_code == 404
+
+
+def test_exit_reports_sensor_confirmed_vacancy(monkeypatch):
+    session = SimpleNamespace(
+        id=101,
+        parking_lot_id=30,
+        parking_slot_id=20,
+        user_id=1,
+        vehicle_id=10,
+        status="ACTIVE",
+        started_at=None,
+        ended_at=None,
+    )
+    slot = SimpleNamespace(status="AVAILABLE", is_available=True)
+    db = MagicMock()
+
+    monkeypatch.setattr(
+        session_service,
+        "get_session_for_user_for_update",
+        lambda *a: session,
+    )
+    monkeypatch.setattr(
+        session_service,
+        "get_slot_for_update",
+        lambda *a: slot,
+    )
+    monkeypatch.setattr(
+        session_service,
+        "consume_unused_session_tokens",
+        lambda *a: 1,
+    )
+    monkeypatch.setattr(
+        session_service.notification_service,
+        "create_safely",
+        lambda *a, **kwargs: None,
+    )
+
+    result = session_service.end_parking_session(
+        db, session_id=101, user_id=1
+    )
+
+    assert result["status"] == "COMPLETED"
+    assert result["slot_status"] == "AVAILABLE"
+    assert result["slot_vacancy_confirmed"] is True
+    assert "vacancy confirmed" in result["message"].lower()
+    db.commit.assert_called_once()

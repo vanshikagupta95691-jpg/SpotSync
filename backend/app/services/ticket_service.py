@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.parking_session import ParkingSession
 from app.repositories.ticket_repository import (
     create_ticket_token,
-    get_ticket_by_hash,
+    get_token_for_update,
     revoke_unused_session_tokens,
 )
 
@@ -59,7 +59,7 @@ def generate_session_ticket(
 
     return {
         "token": raw_token,
-        "navigation_url": f"/api/navigate/{raw_token}",
+        "navigation_url": f"/navigate/{raw_token}",
         "expires_at": expires_at,
         "message": "Use this reusable QR link to find your parking space. It will be consumed after successful parking exit.",
     }
@@ -75,7 +75,9 @@ def validate_session_ticket(db: Session, raw_token: str):
     token_hash = _hash_token(raw_token)
     now = datetime.now(timezone.utc)
 
-    token = get_ticket_by_hash(db, token_hash)
+    # Admin validation is single-use; lock the token against concurrent
+    # validation attempts. Public driver navigation uses a read-only lookup.
+    token = get_token_for_update(db, token_hash)
 
     if token is None:
         raise HTTPException(
@@ -109,7 +111,12 @@ def validate_session_ticket(db: Session, raw_token: str):
             detail="Parking session is not active",
         )
 
-
+    try:
+        token.used_at = now
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "valid": True,

@@ -50,18 +50,6 @@ def get_driver_navigation(db: Session, raw_token: str):
             detail="Navigation link is no longer valid",
         )
 
-    if token.used_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Navigation link has already been used",
-        )
-
-    if token.expires_at <= now:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Navigation link has expired",
-        )
-
     parking_session = db.get(
         ParkingSession,
         token.parking_session_id,
