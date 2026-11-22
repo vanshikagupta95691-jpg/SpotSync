@@ -66,7 +66,8 @@ function StaffDashboard({ spaces = [], sessions = [], alerts = [] }) {
 
   // Count each sensor once, even when it is both offline and stale.
   const sensorWarnings = sensors.filter(
-    s => ['Offline', 'Stale', 'Fault', 'Unknown'].includes(s.status)
+    s => s.sensor_id !== 'SENSOR_008' &&
+      ['Offline', 'Stale', 'Fault', 'Unknown'].includes(s.status)
   ).length
 
   const unresolvedMismatches = mismatches.filter(
@@ -260,9 +261,14 @@ function StaffDashboard({ spaces = [], sessions = [], alerts = [] }) {
                     s => sensorBayMap[s.id] === space.id
                   )
 
+                  const sensorOccupancy = String(
+                    sensor?.occupancy || 'UNKNOWN'
+                  ).toUpperCase()
+
                   const unreliable =
-                    sensor &&
-                    ['Offline', 'Stale', 'Fault', 'Unknown'].includes(sensor.status)
+                    !sensor ||
+                    !sensor.is_online ||
+                    ['FAULT', 'UNKNOWN', 'OUT_OF_SERVICE'].includes(sensorOccupancy)
 
                   const displayStatus = unreliable
                     ? 'UNKNOWN'
